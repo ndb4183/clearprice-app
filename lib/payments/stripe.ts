@@ -12,28 +12,40 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 /**
- * Always return an absolute URL with https:// (required by Stripe).
- * Ensures no trailing slash.
+ * Produces a valid absolute base URL in all environments.
+ * Priority:
+ * 1) APP_URL (recommended for server-side)
+ * 2) NEXT_PUBLIC_APP_URL (ok, but public env)
+ * 3) VERCEL_URL (auto in Vercel; we add https://)
  */
-function getBaseUrl() {
+function getBaseUrl(): string {
   const raw =
-    process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
     process.env.VERCEL_URL ||
     '';
 
-  if (!raw) {
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
     throw new Error(
-      'Missing NEXT_PUBLIC_APP_URL (or APP_URL). Set it in Vercel Env Vars to your production domain, e.g. https://clearprice-app.vercel.app'
+      'Missing base URL. Set APP_URL (recommended) or NEXT_PUBLIC_APP_URL. (Example: https://clearprice-app.vercel.app)'
     );
   }
 
-  // VERCEL_URL is sometimes like "myapp.vercel.app" (no scheme)
-  const withScheme = raw.startsWith('http://') || raw.startsWith('https://')
-    ? raw
-    : `https://${raw}`;
+  // VERCEL_URL is often like "my-app.vercel.app" (no scheme)
+  const withScheme = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
 
+  // Remove any trailing slash to avoid double slashes when appending paths
   return withScheme.replace(/\/+$/, '');
+}
+
+function absUrl(path: string): string {
+  const base = getBaseUrl();
+  const safePath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${safePath}`;
 }
 
 export async function createCheckoutSession({
@@ -49,26 +61,21 @@ export async function createCheckoutSession({
     redirect(`/sign-up?redirect=checkout&priceId=${priceId}`);
   }
 
-  const baseUrl = getBaseUrl();
-
-  console.log('BASE URL:', baseUrl);
-  console.log(
-    'SUCCESS URL:',
-    `${baseUrl}/api/stripe/checkout?session_id={CHECKOUT_SESSION_ID}`
+  const successUrl = absUrl(
+    `/api/stripe/checkout?session_id={CHECKOUT_SESSION_ID}`
   );
-  console.log('CANCEL URL:', `${baseUrl}/pricing`);
+  const cancelUrl = absUrl('/pricing');
+
+  // Optional debug (safe)
+  console.log('Stripe success_url:', successUrl);
+  console.log('Stripe cancel_url:', cancelUrl);
 
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ['card'],
-    line_items: [
-      {
-        price: priceId,
-        quantity: 1
-      }
-    ],
+    line_items: [{ price: priceId, quantity: 1 }],
     mode: 'subscription',
-    success_url: `${baseUrl}/api/stripe/checkout?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/pricing`,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
     customer: team.stripeCustomerId || undefined,
     client_reference_id: user.id.toString(),
     allow_promotion_codes: true,
@@ -85,8 +92,6 @@ export async function createCustomerPortalSession(team: Team) {
     redirect('/pricing');
   }
 
-  const baseUrl = getBaseUrl();
-
   let configuration: Stripe.BillingPortal.Configuration;
   const configurations = await stripe.billingPortal.configurations.list();
 
@@ -94,6 +99,7 @@ export async function createCustomerPortalSession(team: Team) {
     configuration = configurations.data[0];
   } else {
     const product = await stripe.products.retrieve(team.stripeProductId);
+
     if (!product.active) {
       throw new Error("Team's product is not active in Stripe");
     }
@@ -102,6 +108,7 @@ export async function createCustomerPortalSession(team: Team) {
       product: product.id,
       active: true
     });
+
     if (prices.data.length === 0) {
       throw new Error("No active prices found for the team's product");
     }
@@ -118,7 +125,7 @@ export async function createCustomerPortalSession(team: Team) {
           products: [
             {
               product: product.id,
-              prices: prices.data.map((price) => price.id)
+              prices: prices.data.map((p) => p.id)
             }
           ]
         },
@@ -145,7 +152,7 @@ export async function createCustomerPortalSession(team: Team) {
 
   return stripe.billingPortal.sessions.create({
     customer: team.stripeCustomerId,
-    return_url: `${baseUrl}/dashboard`,
+    return_url: absUrl('/dashboard'),
     configuration: configuration.id
   });
 }
@@ -166,6 +173,7 @@ export async function handleSubscriptionChange(
 
   if (status === 'active' || status === 'trialing') {
     const plan = subscription.items.data[0]?.plan;
+
     await updateTeamSubscription(team.id, {
       stripeSubscriptionId: subscriptionId,
       stripeProductId: plan?.product as string,
