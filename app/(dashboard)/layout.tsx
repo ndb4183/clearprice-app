@@ -9,7 +9,7 @@ export default async function DashboardLayout({
   const user = await getUser();
   if (!user) redirect('/sign-in');
 
-  const team = await getTeamForUser(user.id);
+  const team = await getTeamForUser(); // ✅ no args in this codebase
 
   const status = team?.subscriptionStatus;
   const isPaid = status === 'active' || status === 'trialing';
