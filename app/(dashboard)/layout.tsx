@@ -7,7 +7,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const user = await getUser();
-  if (!user) redirect('/sign-in');
+ if (!user) redirect('/sign-in');
 
   const team = await getTeamForUser(); // ✅ no args in this codebase
 
