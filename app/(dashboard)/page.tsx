@@ -1,27 +1,28 @@
 import { redirect } from 'next/navigation';
 import { getUser, getTeamForUser } from '@/lib/db/queries';
 
-export default async function HomePage() {
-  // Must be signed in
+export default async function DashboardPage() {
+  // 1️⃣ Must be signed in
   const user = await getUser();
   if (!user) redirect('/sign-in');
 
-  // In this codebase, getTeamForUser() takes NO arguments
+  // 2️⃣ In this codebase, getTeamForUser takes NO arguments
   const team = await getTeamForUser();
 
-  const status = team?.subscriptionStatus; // 'trialing' | 'active' | etc.
+  const status = team?.subscriptionStatus;
   const isPaid = status === 'active' || status === 'trialing';
 
+  // 3️⃣ If no team or not paid → send to pricing
   if (!team || !isPaid) {
     redirect('/pricing');
   }
 
-  // You can swap this for your real dashboard home UI later
+  // 4️⃣ Otherwise show dashboard
   return (
     <main className="p-6">
       <h1 className="text-2xl font-bold">Dashboard</h1>
-      <p className="mt-2 text-sm opacity-80">
-        Plan: {team.planName ?? '-'} ({status ?? 'unknown'})
+      <p>
+        Plan: {team.planName ?? '—'} ({status})
       </p>
     </main>
   );
