@@ -1,10 +1,5 @@
-import { Suspense } from 'react';
-import { Login } from '../login';
+import { SignUp } from "@clerk/nextjs";
 
-export default function SignUpPage() {
-  return (
-    <Suspense>
-      <Login mode="signup" />
-    </Suspense>
-  );
+export default function Page() {
+  return <SignUp />;
 }
