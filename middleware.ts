@@ -2,7 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
-  "/app(.*)", // add this now if you want /app to be your member area
+  "/app(.*)",
 ]);
 
 export default clerkMiddleware((auth, req) => {
